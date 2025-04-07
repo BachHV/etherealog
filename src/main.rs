@@ -1,44 +1,3 @@
-// use alloy_consensus::Transaction;
-// use alloy_eips::{BlockId, BlockNumberOrTag};
-// use alloy_provider::{Provider, ProviderBuilder, network::primitives::BlockTransactions};
-// use indicatif::ProgressBar;
-// use revm::{
-//     Context, MainBuilder, MainContext,
-//     database::{AlloyDB, CacheDB, StateBuilder},
-//     database_interface::WrapDatabaseAsync,
-//     inspector::{InspectEvm, inspectors::TracerEip3155},
-//     primitives::TxKind,
-// };
-// use std::fs::OpenOptions;
-// use std::io::BufWriter;
-// use std::io::Write;
-// use std::sync::Arc;
-// use std::sync::Mutex;
-// use std::time::Instant;
-//
-// struct FlushWriter {
-//     writer: Arc<Mutex<BufWriter<std::fs::File>>>,
-// }
-//
-// impl FlushWriter {
-//     fn new(writer: Arc<Mutex<BufWriter<std::fs::File>>>) -> Self {
-//         Self { writer }
-//     }
-// }
-//
-// impl Write for FlushWriter {
-//     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-//         self.writer.lock().unwrap().write(buf)
-//     }
-//
-//     fn flush(&mut self) -> std::io::Result<()> {
-//         self.writer.lock().unwrap().flush()
-//     }
-// }
-
-// // This API key is acquired from <developer.metamask.io> and looks something like `c60b0bb42f8a4c6481ecd229eddaca27`
-// const API_KEY: &str = include_str!("../.config/API_KEY_METAMASK");
-
 use revm::bytecode::Bytecode;
 use revm::context::ContextTr;
 use revm::database::EmptyDB;
@@ -52,14 +11,6 @@ use revm::state::{Account, AccountInfo};
 use revm::{Context, MainBuilder};
 use std::cell::RefCell;
 use std::rc::Rc;
-
-struct Inspector {}
-
-impl Inspector {
-    fn new() -> Self {
-        Self {}
-    }
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -189,10 +140,11 @@ async fn main() -> anyhow::Result<()> {
     //     elapsed.as_secs_f64()
     // );
 
+    // TODO(toms): can we deconstruct `evm` to simplify things? (and pull the necessary types out of it)
+
     let spec = SpecId::default();
     let ctx: Context = Context::new(EmptyDB::new(), spec);
-    let inspector = Inspector::new();
-    let mut evm = ctx.build_mainnet_with_inspector(inspector);
+    let mut evm = ctx.build_mainnet_with_inspector(());
 
     let target_address = Address::from_word(b256!(
         "0x00000000000000000000000000000000000000000000000000000000000000F0"
@@ -272,24 +224,47 @@ async fn main() -> anyhow::Result<()> {
             SecretKey *common.Hash    `json:"secretKey"`
         }
         */
+
         // https://eips.ethereum.org/EIPS/eip-3155#test-cases
-        // ${BESU_HOME}/bin/evmtool --code 0x604080536040604055604060006040600060025afa6040f3
-        // > PUSH1:      {"pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0}
-        // > DUP1:       {"pc":2,"op":128,"gas":"0x2540be3fd","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0}
-        // > MSTORE8:    {"pc":3,"op":83,"gas":"0x2540be3fa","gasCost":"0xc","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":4,"op":96,"gas":"0x2540be3ee","gasCost":"0x3","memory":"...","memSize":96,"stack":[],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":6,"op":96,"gas":"0x2540be3eb","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x40"],"depth":1,"refund":0}
-        // > SSTORE:     {"pc":8,"op":85,"gas":"0x2540be3e8","gasCost":"0x4e20","memory":"...","memSize":96,"stack":["0x40","0x40"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":9,"op":96,"gas":"0x2540b95c8","gasCost":"0x3","memory":"...","memSize":96,"stack":[],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":11,"op":96,"gas":"0x2540b95c5","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x40"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":13,"op":96,"gas":"0x2540b95c2","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x40","0x0"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":15,"op":96,"gas":"0x2540b95bf","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x40","0x0","0x40"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":17,"op":96,"gas":"0x2540b95bc","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x40","0x0","0x40","0x0"],"depth":1,"refund":0}
-        // > GAS:        {"pc":19,"op":90,"gas":"0x2540b95b9","gasCost":"0x2","memory":"...","memSize":96,"stack":["0x40","0x0","0x40","0x0","0x2"],"depth":1,"refund":0}
-        // > STATICCALL: {"pc":20,"op":250,"gas":"0x2540b95b7","gasCost":"0x24abb676c","memory":"...","memSize":96,"stack":["0x40","0x0","0x40","0x0","0x2","0x2540b95b7"],"depth":1,"refund":0}
-        // > PUSH1:      {"pc":21,"op":96,"gas":"0x2540b92a7","gasCost":"0x3","memory":"...","memSize":96,"stack":["0x1"],"returnData":"0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b","depth":1,"refund":0}
-        // > RETURN:     {"pc":23,"op":243,"gas":"0x2540b92a4","gasCost":"0x0","memory":"...","memSize":96,"stack":["0x1","0x40"],"returnData":"0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b","depth":1,"refund":0}
-        // {"stateRoot":"0x8fa0dcc7f1d2383c89e5737c2843632db881c0946e80b71fe7175365e6538797","output":"0x40","gasUsed":"0x515c","pass":true,"fork":"Istanbul"}
+        //
+        // λ evm run --code '0x604080536040604055604060006040600060ff5afa6040f3'
+        //     --json --debug --dump --nomemory=false --noreturndata=false
+        //     --sender '0xF0' --receiver '0xF1' --gas 10000000000
+        //
+        // {"opName":"PUSH1","pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0}
+        // {"opName":"DUP1","pc":2,"op":128,"gas":"0x2540be3fd","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0}
+        // {"opName":"MSTORE8","pc":3,"op":83,"gas":"0x2540be3fa","gasCost":"0xc","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0}
+        // {"opName":"PUSH1","pc":4,"op":96,"gas":"0x2540be3ee","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":6,"op":96,"gas":"0x2540be3eb","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"SSTORE","pc":8,"op":85,"gas":"0x2540be3e8","gasCost":"0x5654","memSize":96,"stack":["0x40","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":9,"op":96,"gas":"0x2540b8d94","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":11,"op":96,"gas":"0x2540b8d91","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":13,"op":96,"gas":"0x2540b8d8e","gasCost":"0x3","memSize":96,"stack":["0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":15,"op":96,"gas":"0x2540b8d8b","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":17,"op":96,"gas":"0x2540b8d88","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"GAS","pc":19,"op":90,"gas":"0x2540b8d85","gasCost":"0x2","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"STATICCALL","pc":20,"op":250,"gas":"0x2540b8d83","gasCost":"0x24abb5f76","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff","0x2540b8d83"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":21,"op":96,"gas":"0x2540b835b","gasCost":"0x3","memSize":96,"stack":["0x1"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"RETURN","pc":23,"op":243,"gas":"0x2540b8358","gasCost":"0x0","memSize":96,"stack":["0x1","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"output":"40","gasUsed":"0x60a8"}
+        // {
+        //     "root": "3463104800c5985b196eb96437cdff04e0a669d85a898ff68924353b5f973597",
+        //     "accounts": {
+        //         "0x00000000000000000000000000000000000000f1": {
+        //             "balance": "0",
+        //             "nonce": 0,
+        //             "root": "0x362d2b556fc3ace7e6b0a2d2ddd306a7bc0cc299f5264d9abd557cde6cd2dbf2",
+        //             "codeHash": "0x58c35e4d81bf6b27e1725f0b3c3364b849bace3196710ee574714da41310b492",
+        //             "code": "0x604080536040604055604060006040600060ff5afa6040f3",
+        //             "storage": {
+        //                 "0x0000000000000000000000000000000000000000000000000000000000000040": "40"
+        //             },
+        //             "address": "0x00000000000000000000000000000000000000f1",
+        //             "key": "0xe8c07bab8822eeeb875236e148f781341157f9bfc56c1c53972489ff4009695b"
+        //         }
+        //     }
+        // }
+
         let bytecode = Bytecode::new_raw(Bytes::from(
             &[
                 0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00, 0x60,
@@ -324,18 +299,7 @@ async fn main() -> anyhow::Result<()> {
             while interpreter.control.instruction_result().is_continue() {
                 // interpreter.step(instruction_table, host);
 
-                // {"pc":4,
-                //  "op":96,
-                //  "gas":"0x2540be3ee",
-                //  "gasCost":"0x3",
-                //  "memory":"...",
-                //  "memSize":96,
-                //  "stack":[],
-                //  "depth":1,
-                //  "refund":0,
-                //  "opName":"PUSH1"}
-
-                // > STATICCALL: {"pc":20,"op":250,"stack":["0x40","0x0","0x40","0x0","0x2","0x2540b95b7"],"gas":"0x2540b95b7","gasCost":"0x24abb676c","memory":"...","memSize":96,"depth":1,"refund":0}
+                // STATICCALL:
                 // Stack input
                 //     gas: amount of gas to send to the sub context to execute. The gas that is not used by the sub context is returned to this one.
                 //     address: the account which context to execute.
