@@ -19,34 +19,29 @@ async fn main() -> anyhow::Result<()> {
     // TODO(toms): can we deconstruct `evm` to simplify things? (and pull the necessary types out of it)
 
     let spec = SpecId::default();
-    let ctx: Context = Context::new(EmptyDB::new(), spec);
-    let mut evm = ctx.build_mainnet_with_inspector(());
-
-    let instructions = EthInstructions::default();
-    // let mut journal: Journal<EmptyDB> = Journal::new(spec, EmptyDB::default());
-    // let host = &mut DummyHost;
-
-    // let instructions = &mut evm.instruction;
-    let journal = evm.journal();
-    // let host = &mut evm.data.ctx;
+    let mut ctx: Context = Context::new(EmptyDB::new(), spec);
 
     let target_address = Address::from_word(b256!(
         "0x00000000000000000000000000000000000000000000000000000000000000F0"
     ));
-    journal.state().insert(target_address, Account::default());
+    ctx.journal()
+        .state()
+        .insert(target_address, Account::default());
 
     let caller_address = Address::from_word(b256!(
         "0x00000000000000000000000000000000000000000000000000000000000000FF"
     ));
-    journal.state().insert(caller_address, Account::default());
+    ctx.journal()
+        .state()
+        .insert(caller_address, Account::default());
 
-    let bytecode_address = Address::from_word(b256!(
-        "0x0000000000000000000000000000000000000000000000000000000000000002"
-    ));
-    journal.state().insert(
-        bytecode_address,
-        AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(&[0x60, 0x00][..]))).into(),
-    );
+    // let bytecode_address = Address::from_word(b256!(
+    //     "0x0000000000000000000000000000000000000000000000000000000000000002"
+    // ));
+    // ctx.journal().state().insert(
+    //     bytecode_address,
+    //     AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(&[0x60, 0x00][..]))).into(),
+    // );
 
     let memory = Rc::new(RefCell::new(EMPTY_SHARED_MEMORY));
     let interpreter_input = InputsImpl {
@@ -168,9 +163,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     {
-        // evm.run_interpreter(&mut interpreter);
+        // create_init_frame
+        // run_exec_loop
+        // EthFrame::process_next_action
 
-        let (host, _instructions) = evm.ctx_instructions();
+        let instructions = EthInstructions::default();
+        let instructions = instructions.instruction_table();
 
         // let action = interpreter.run_plain(instructions.instruction_table(), context);
         let action = {
@@ -203,11 +201,12 @@ async fn main() -> anyhow::Result<()> {
                 // it will do noop and just stop execution of this contract
                 interpreter.bytecode.relative_jump(1);
 
-                instructions.instruction_table()[opcode as usize](&mut interpreter, host)
+                instructions[opcode as usize](&mut interpreter, &mut ctx)
             }
 
             interpreter.take_next_action()
         };
+
         println!("{action:#?}");
     }
 
