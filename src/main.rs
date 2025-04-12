@@ -1,11 +1,11 @@
 use revm::bytecode::{Bytecode, opcode};
 use revm::context::{ContextTr, Evm, TxEnv};
-use revm::database::{BENCH_TARGET, BenchmarkDB, EmptyDB};
+use revm::database::EmptyDB;
 use revm::handler::instructions::{EthInstructions, InstructionProvider};
 use revm::handler::{EthPrecompiles, EvmTr};
 use revm::inspector::inspectors::TracerEip3155;
 use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
-use revm::primitives::{Address, Bytes, TxKind, U256, address, b256};
+use revm::primitives::{Bytes, TxKind, address};
 use revm::state::AccountInfo;
 use revm::{Context, InspectEvm, MainBuilder, MainContext};
 
@@ -98,10 +98,7 @@ async fn main() -> anyhow::Result<()> {
     //     }
     // }
 
-    // let db: EmptyDB = EmptyDB::default();
-
     let mut ctx = Context::mainnet().with_db(EmptyDB::default());
-    // ctx.journal().state().
 
     // let target_address = Address::from_word(b256!(
     //     "0x00000000000000000000000000000000000000000000000000000000000000F0"
@@ -134,6 +131,9 @@ async fn main() -> anyhow::Result<()> {
 
     // NOTE(toms): In EVM, it is not possible to return a value directly from the stack. The value
     //   must be first written to memory (e.g. MSTORE), then RETURN'd.
+
+    // state: EVM State is a mapping from addresses to accounts.
+    // journal: The journal is a wrapper around the state that tracks changes and allows for e.g. rollbacks.
 
     ctx.journal().state().insert(
         address!("00000000000000000000000000000000000000ff"),
