@@ -1,11 +1,12 @@
-use revm::bytecode::Bytecode;
+use revm::bytecode::{Bytecode, opcode};
 use revm::context::{ContextTr, Evm, TxEnv};
-use revm::database::{BENCH_TARGET, BenchmarkDB};
+use revm::database::{BENCH_TARGET, BenchmarkDB, EmptyDB};
 use revm::handler::instructions::{EthInstructions, InstructionProvider};
 use revm::handler::{EthPrecompiles, EvmTr};
 use revm::inspector::inspectors::TracerEip3155;
 use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
-use revm::primitives::{Address, Bytes, TxKind, U256};
+use revm::primitives::{Address, Bytes, TxKind, U256, address, b256};
+use revm::state::AccountInfo;
 use revm::{Context, InspectEvm, MainBuilder, MainContext};
 
 #[tokio::main]
@@ -97,15 +98,51 @@ async fn main() -> anyhow::Result<()> {
     //     }
     // }
 
-    let bytecode = Bytecode::new_raw(Bytes::from(
-        &[
-            0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00, 0x60,
-            0x40, 0x60, 0x00, 0x60, 0x02, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
-        ][..],
-    ));
-    let ctx = Context::mainnet().with_db(BenchmarkDB::new_bytecode(bytecode));
+    // let db: EmptyDB = EmptyDB::default();
 
-    // Create a new EVM instance.
+    let mut ctx = Context::mainnet().with_db(EmptyDB::default());
+    // ctx.journal().state().
+
+    // let target_address = Address::from_word(b256!(
+    //     "0x00000000000000000000000000000000000000000000000000000000000000F0"
+    // ));
+    // ctx.journal()
+    //     .state()
+    //     .insert(target_address, Account::default());
+    //
+    // let caller_address = Address::from_word(b256!(
+    //     "0x00000000000000000000000000000000000000000000000000000000000000FF"
+    // ));
+    // ctx.journal()
+    //     .state()
+    //     .insert(caller_address, Account::default());
+
+    ctx.journal().state().insert(
+        address!("ffffffffffffffffffffffffffffffffffffffff"),
+        AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+            &[
+                0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00, 0x60,
+                0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
+            ][..],
+        )))
+        .into(),
+    );
+
+    // NOTE(toms): In EVM, it's interesting what happens with a CALL occurs to an address that
+    //   either doesn't exist, or doesn't have any code. It's a valid call, and then VM continues
+    //   with defined behavior.
+
+    // NOTE(toms): In EVM, it is not possible to return a value directly from the stack. The value
+    //   must be first written to memory (e.g. MSTORE), then RETURN'd.
+
+    ctx.journal().state().insert(
+        address!("00000000000000000000000000000000000000ff"),
+        AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+            &[opcode::PUSH2, 0xbe, 0xef, opcode::STOP][..],
+        )))
+        .into(),
+    );
+
     let mut evm = Evm::new_with_inspector(
         ctx,
         TracerEip3155::new_stdout(),
@@ -115,9 +152,8 @@ async fn main() -> anyhow::Result<()> {
 
     // NOTE(toms): gas costs will include 'base stipend' (21000)
 
-    // inspect the transaction.
     let _ = evm.inspect_with_tx(TxEnv {
-        kind: TxKind::Call(BENCH_TARGET),
+        kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
         gas_limit: 0x1000000,
         // tx_type: 0,
         // caller: Address::default(),
@@ -139,4 +175,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-mod isolate {}
+mod isolate {
+    // TODO(toms): tests!
+}
