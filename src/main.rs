@@ -1,13 +1,11 @@
 use revm::bytecode::{Bytecode, opcode};
 use revm::context::{ContextTr, Evm, TxEnv};
 use revm::database::EmptyDB;
-use revm::handler::instructions::{EthInstructions, InstructionProvider};
-use revm::handler::{EthPrecompiles, EvmTr};
-use revm::inspector::inspectors::TracerEip3155;
-use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
+use revm::handler::EthPrecompiles;
+use revm::handler::instructions::EthInstructions;
 use revm::primitives::{Bytes, TxKind, address};
 use revm::state::AccountInfo;
-use revm::{Context, InspectEvm, MainBuilder, MainContext};
+use revm::{Context, InspectEvm, MainContext};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -145,7 +143,8 @@ async fn main() -> anyhow::Result<()> {
 
     let mut evm = Evm::new_with_inspector(
         ctx,
-        TracerEip3155::new_stdout(),
+        // revm::inspector::inspectors::TracerEip3155::new_stdout(),
+        isolate::Tracer::new(),
         EthInstructions::new_mainnet(),
         EthPrecompiles::default(),
     );
@@ -175,6 +174,81 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO(toms): tests!
 mod isolate {
-    // TODO(toms): tests!
+    use revm::Context;
+    use revm::interpreter::{
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+    };
+    use revm::primitives::{Address, Log, U256};
+
+    pub struct Tracer {
+        _unused: (),
+    }
+
+    impl Tracer {
+        pub fn new() -> Self {
+            Self { _unused: () }
+        }
+    }
+
+    impl revm::Inspector<Context> for Tracer {
+        fn initialize_interp(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+
+        fn step(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+
+        fn step_end(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+
+        fn log(&mut self, _interp: &mut Interpreter, _context: &mut Context, _log: Log) {}
+
+        fn call(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &mut CallInputs,
+        ) -> Option<CallOutcome> {
+            None
+        }
+
+        fn call_end(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &CallInputs,
+            _outcome: &mut CallOutcome,
+        ) {
+        }
+
+        fn create(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &mut CreateInputs,
+        ) -> Option<CreateOutcome> {
+            None
+        }
+
+        fn create_end(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &CreateInputs,
+            _outcome: &mut CreateOutcome,
+        ) {
+        }
+
+        fn eofcreate(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &mut EOFCreateInputs,
+        ) -> Option<CreateOutcome> {
+            None
+        }
+
+        fn eofcreate_end(
+            &mut self,
+            _context: &mut Context,
+            _inputs: &EOFCreateInputs,
+            _outcome: &mut CreateOutcome,
+        ) {
+        }
+
+        fn selfdestruct(&mut self, _contract: Address, _target: Address, _value: U256) {}
+    }
 }
