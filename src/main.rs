@@ -96,7 +96,8 @@ type LegacyTx struct {
 // journal: The journal is a wrapper around the state that tracks changes and allows for e.g. rollbacks.
 
 use revm::bytecode::{Bytecode, opcode};
-use revm::primitives::{Bytes, address};
+use revm::context::TxEnv;
+use revm::primitives::{Bytes, TxKind, address};
 use revm::state::AccountInfo;
 
 #[tokio::main]
@@ -120,7 +121,27 @@ async fn main() -> anyhow::Result<()> {
         ))),
     );
 
-    engine.execute();
+    // TODO(toms): prestate - block environment?
+
+    let _ = engine.execute(TxEnv {
+        kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+        gas_limit: 0x1000000,
+        // tx_type: 0,
+        // caller: Address::default(),
+        // gas_limit: 30_000_000,
+        // gas_price: 0,
+        // kind: TxKind::Call(Address::default()),
+        // value: U256::ZERO,
+        // data: Bytes::default(),
+        // nonce: 0,
+        // chain_id: Some(1), // Mainnet chain ID is 1
+        // access_list: Default::default(),
+        // gas_priority_fee: Some(0),
+        // blob_hashes: Vec::new(),
+        // max_fee_per_blob_gas: 0,
+        // authorization_list: Vec::new(),
+        ..Default::default()
+    });
 
     Ok(())
 }
@@ -135,7 +156,18 @@ async fn main() -> anyhow::Result<()> {
 //   * KECCAK256
 //   * EOF?
 
+// TODO(toms): open questions
+//   * What are all the 'inputs' for a smart code execution?
+//     * Account storage (key-value storage for smart contract accounts)
+//     * Transaction data - CALLDATA
+//   * Storage? MLOAD, SLOAD, TLOAD
+//   * What are log 'topics'?
+//   * BLOBHASH and BLOBBASEFEE - related to BLOBs, introduced as part of EIP-4844 (Proto-Danksharding)
+//   * How does SELFDESTRUCT work?
+//   * Authorization list? Access list?
+
 mod isolate {
+    use revm::context::result::{EVMError, ResultAndState};
     use revm::context::{ContextTr, Evm, TxEnv};
     use revm::database::EmptyDB;
     use revm::handler::EthPrecompiles;
@@ -147,7 +179,8 @@ mod isolate {
     };
     use revm::primitives::{Address, Log, TxKind, U256, address};
     use revm::state::Account;
-    use revm::{Context, InspectEvm, MainContext};
+    use revm::{Context, ExecuteEvm, InspectEvm, MainContext};
+    use std::convert::Infallible;
 
     pub struct Engine {
         evm: Evm<Context, Tracer, EthInstructions<EthInterpreter, Context>, EthPrecompiles>,
@@ -169,28 +202,10 @@ mod isolate {
             self.evm.journal().state().insert(address, account.into());
         }
 
-        pub fn execute(&mut self) {
+        pub fn execute(&mut self, tx: TxEnv) -> Result<ResultAndState, EVMError<Infallible>> {
             // NOTE(toms): gas costs will include 'base stipend' (21000)
 
-            let _ = self.evm.inspect_with_tx(TxEnv {
-                kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
-                gas_limit: 0x1000000,
-                // tx_type: 0,
-                // caller: Address::default(),
-                // gas_limit: 30_000_000,
-                // gas_price: 0,
-                // kind: TxKind::Call(Address::default()),
-                // value: U256::ZERO,
-                // data: Bytes::default(),
-                // nonce: 0,
-                // chain_id: Some(1), // Mainnet chain ID is 1
-                // access_list: Default::default(),
-                // gas_priority_fee: Some(0),
-                // blob_hashes: Vec::new(),
-                // max_fee_per_blob_gas: 0,
-                // authorization_list: Vec::new(),
-                ..Default::default()
-            });
+            self.evm.inspect_with_tx(tx)
         }
     }
 
@@ -205,8 +220,12 @@ mod isolate {
     }
 
     impl revm::Inspector<Context> for Tracer {
-        fn initialize_interp(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
-            println!(">>> initialize_interp");
+        fn initialize_interp(&mut self, _interpreter: &mut Interpreter, ctx: &mut Context) {
+            // TODO(toms): include initial stipend, etc. (InitialAndFloorGas) in trace log?
+            println!(
+                ">>> initialize_interp: {:#?}",
+                (&ctx.tx, &ctx.block, &ctx.cfg)
+            );
         }
 
         fn step(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
