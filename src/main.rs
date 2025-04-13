@@ -175,8 +175,18 @@ async fn main() -> anyhow::Result<()> {
 }
 
 // TODO(toms): tests!
+//   * empty
+//   * simple
+//   * STATICCALL
+//   * CALL
+//   * CREATE2
+//   * SELFDESTRUCT
+//   * KECCAK256
+//   * EOF?
+
 mod isolate {
     use revm::Context;
+    use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
     use revm::interpreter::{
         CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
     };
@@ -193,62 +203,81 @@ mod isolate {
     }
 
     impl revm::Inspector<Context> for Tracer {
-        fn initialize_interp(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+        fn initialize_interp(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
+            println!(">>> initialize_interp");
+        }
 
-        fn step(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+        fn step(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
+            let pc = interpreter.bytecode.pc();
+            let opcode = interpreter.bytecode.opcode();
+            let stack = interpreter.stack.data();
+            let gas_remaining = interpreter.control.gas().remaining();
+            println!(
+                "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
+                interpreter.memory.size()
+            );
+        }
 
-        fn step_end(&mut self, _interp: &mut Interpreter, _context: &mut Context) {}
+        fn step_end(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
+            // println!(">>> step_end");
+        }
 
-        fn log(&mut self, _interp: &mut Interpreter, _context: &mut Context, _log: Log) {}
+        fn log(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context, _log: Log) {
+            println!(">>> log");
+        }
 
-        fn call(
-            &mut self,
-            _context: &mut Context,
-            _inputs: &mut CallInputs,
-        ) -> Option<CallOutcome> {
+        fn call(&mut self, _ctx: &mut Context, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+            println!(">>> call");
             None
         }
 
         fn call_end(
             &mut self,
-            _context: &mut Context,
+            _ctx: &mut Context,
             _inputs: &CallInputs,
             _outcome: &mut CallOutcome,
         ) {
+            println!(">>> call_end");
         }
 
         fn create(
             &mut self,
-            _context: &mut Context,
+            _ctx: &mut Context,
             _inputs: &mut CreateInputs,
         ) -> Option<CreateOutcome> {
+            println!(">>> create");
             None
         }
 
         fn create_end(
             &mut self,
-            _context: &mut Context,
+            _ctx: &mut Context,
             _inputs: &CreateInputs,
             _outcome: &mut CreateOutcome,
         ) {
+            println!(">>> create_end");
         }
 
         fn eofcreate(
             &mut self,
-            _context: &mut Context,
+            _ctx: &mut Context,
             _inputs: &mut EOFCreateInputs,
         ) -> Option<CreateOutcome> {
+            println!(">>> eofcreate");
             None
         }
 
         fn eofcreate_end(
             &mut self,
-            _context: &mut Context,
+            _ctx: &mut Context,
             _inputs: &EOFCreateInputs,
             _outcome: &mut CreateOutcome,
         ) {
+            println!(">>> eofcreate_end");
         }
 
-        fn selfdestruct(&mut self, _contract: Address, _target: Address, _value: U256) {}
+        fn selfdestruct(&mut self, _contract: Address, _target: Address, _value: U256) {
+            println!(">>> selfdestruct");
+        }
     }
 }
