@@ -177,9 +177,9 @@ mod isolate {
     use revm::interpreter::{
         CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
     };
-    use revm::primitives::{Address, Log, TxKind, U256, address};
+    use revm::primitives::{Address, Log, U256};
     use revm::state::Account;
-    use revm::{Context, ExecuteEvm, InspectEvm, MainContext};
+    use revm::{Context, InspectEvm, MainContext};
     use std::convert::Infallible;
 
     pub struct Engine {
