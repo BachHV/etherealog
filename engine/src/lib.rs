@@ -62,7 +62,7 @@ use revm::handler::EthPrecompiles;
 use revm::handler::instructions::EthInstructions;
 use revm::inspector::InspectorEvmTr;
 use revm::interpreter::interpreter::EthInterpreter;
-use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
+use revm::interpreter::interpreter_types::{Jumps, LoopControl};
 use revm::interpreter::{
     CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
 };
@@ -102,6 +102,21 @@ impl<I: Inspector<Context>> Engine<I> {
     }
 }
 
+// TODO(toms): Step (from https://eips.ethereum.org/EIPS/eip-3155)
+//   * pc
+//   * op
+//   * gas
+//   * gasCost
+//   * memSize
+//   * stack
+//   * depth
+//   * returnData
+//   * refund
+//   * opName
+//   * error
+//   * memory
+//   * storage
+
 #[derive(Debug, PartialEq)]
 pub enum Event {
     Step {
@@ -111,6 +126,14 @@ pub enum Event {
         gas_remaining: u64,
     },
 }
+
+// TODO(toms): Summary (from https://eips.ethereum.org/EIPS/eip-3155)
+//   * stateRoot
+//   * output
+//   * gasUsed
+//   * pass
+//   * time
+//   * fork
 
 pub trait TracerDelegate {
     fn emit(&mut self, event: Event);
@@ -140,6 +163,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
         let opcode = interpreter.bytecode.opcode();
         let stack = interpreter.stack.data();
         let gas_remaining = interpreter.control.gas().remaining();
+
         // println!(
         //     "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
         //     interpreter.memory.size()
@@ -208,8 +232,6 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
 }
 
 // TODO(toms): tests!
-//   * empty
-//   * simple
 //   * STATICCALL
 //   * CALL
 //   * CREATE2
@@ -247,7 +269,59 @@ mod tests {
         }
     }
 
+    fn stack(values: impl IntoIterator<Item = u64>) -> Box<[U256]> {
+        values.into_iter().map(U256::from).collect()
+    }
+
     // TODO(toms): use external JSONL files as harnesses for tests (for input and output)
+
+    #[test]
+    fn experiment() {
+        let mut engine = Engine::new(Tracer::new(TestDelegate::default()));
+
+        engine.create_account(
+            address!("ffffffffffffffffffffffffffffffffffffffff"),
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+                &[
+                    0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00,
+                    0x60, 0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
+                ][..],
+            ))),
+        );
+
+        engine.create_account(
+            address!("00000000000000000000000000000000000000ff"),
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+                &[opcode::PUSH2, 0xbe, 0xef, opcode::STOP][..],
+            ))),
+        );
+
+        // TODO(toms): prestate - block environment?
+
+        let _ = engine
+            .execute(TxEnv {
+                kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+                gas_limit: 0x1000000,
+                // tx_type: 0,
+                // caller: Address::default(),
+                // gas_limit: 30_000_000,
+                // gas_price: 0,
+                // kind: TxKind::Call(Address::default()),
+                // value: U256::ZERO,
+                // data: Bytes::default(),
+                // nonce: 0,
+                // chain_id: Some(1), // Mainnet chain ID is 1
+                // access_list: Default::default(),
+                // gas_priority_fee: Some(0),
+                // blob_hashes: Vec::new(),
+                // max_fee_per_blob_gas: 0,
+                // authorization_list: Vec::new(),
+                ..Default::default()
+            })
+            .unwrap();
+
+        // TODO(toms): assert?!
+    }
 
     #[test]
     fn example() {
@@ -272,10 +346,6 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-
-        fn stack(values: impl IntoIterator<Item = u64>) -> Box<[U256]> {
-            values.into_iter().map(U256::from).collect()
-        }
 
         // https://eips.ethereum.org/EIPS/eip-3155#test-cases
         //
@@ -305,7 +375,7 @@ mod tests {
             result.result,
             ExecutionResult::Success {
                 reason: SuccessReason::Return,
-                gas_used: 0x60a8 + 21000, // include base stipend
+                gas_used: 0x60a8 + 21000, // includes base stipend
                 gas_refunded: 0,
                 logs: vec![],
                 output: Output::Call([0x40].into()),
@@ -410,48 +480,77 @@ mod tests {
     }
 
     #[test]
-    fn simple() {
+    fn empty() {
         let mut engine = Engine::new(Tracer::new(TestDelegate::default()));
 
-        engine.create_account(
-            address!("ffffffffffffffffffffffffffffffffffffffff"),
-            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
-                &[
-                    0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00,
-                    0x60, 0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
-                ][..],
-            ))),
-        );
+        let address = address!("ffffffffffffffffffffffffffffffffffffffff");
+        engine.create_account(address, AccountInfo::default());
 
-        engine.create_account(
-            address!("00000000000000000000000000000000000000ff"),
-            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
-                &[opcode::PUSH2, 0xbe, 0xef, opcode::STOP][..],
-            ))),
-        );
-
-        // TODO(toms): prestate - block environment?
-
-        let _ = engine
+        let result = engine
             .execute(TxEnv {
-                kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
-                gas_limit: 0x1000000,
-                // tx_type: 0,
-                // caller: Address::default(),
-                // gas_limit: 30_000_000,
-                // gas_price: 0,
-                // kind: TxKind::Call(Address::default()),
-                // value: U256::ZERO,
-                // data: Bytes::default(),
-                // nonce: 0,
-                // chain_id: Some(1), // Mainnet chain ID is 1
-                // access_list: Default::default(),
-                // gas_priority_fee: Some(0),
-                // blob_hashes: Vec::new(),
-                // max_fee_per_blob_gas: 0,
-                // authorization_list: Vec::new(),
+                kind: TxKind::Call(address),
                 ..Default::default()
             })
             .unwrap();
+
+        assert_eq!(
+            result.result,
+            ExecutionResult::Success {
+                reason: SuccessReason::Stop,
+                gas_used: 21000, // base stipend
+                gas_refunded: 0,
+                logs: vec![],
+                output: Output::Call([].into()),
+            }
+        );
+
+        assert_eq!(engine.inspector().delegate.events, &[]);
+    }
+
+    #[test]
+    fn simple() {
+        let mut engine = Engine::new(Tracer::new(TestDelegate::default()));
+
+        let address = address!("ffffffffffffffffffffffffffffffffffffffff");
+        engine.create_account(
+            address,
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(&[0x60, 0x40][..]))),
+        );
+
+        let result = engine
+            .execute(TxEnv {
+                kind: TxKind::Call(address),
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.result,
+            ExecutionResult::Success {
+                reason: SuccessReason::Stop,
+                gas_used: 3 + 21000, // includes base stipend
+                gas_refunded: 0,
+                logs: vec![],
+                output: Output::Call([].into()),
+            }
+        );
+
+        assert_eq!(
+            engine.inspector().delegate.events,
+            &[
+                Event::Step {
+                    pc: 0,
+                    opcode: 96,
+                    stack: stack([]),
+                    gas_remaining: 29979000
+                },
+                Event::Step {
+                    pc: 2,
+                    opcode: 0,
+                    stack: stack([64]),
+                    gas_remaining: 29978997
+                }
+            ]
+        );
     }
 }
