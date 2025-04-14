@@ -95,55 +95,130 @@ type LegacyTx struct {
 // state: EVM State is a mapping from addresses to accounts.
 // journal: The journal is a wrapper around the state that tracks changes and allows for e.g. rollbacks.
 
-use revm::bytecode::{Bytecode, opcode};
-use revm::context::TxEnv;
-use revm::primitives::{Bytes, TxKind, address};
-use revm::state::AccountInfo;
+use revm::context::result::{EVMError, ResultAndState};
+use revm::context::{ContextTr, Evm, TxEnv};
+use revm::database::EmptyDB;
+use revm::handler::EthPrecompiles;
+use revm::handler::instructions::EthInstructions;
+use revm::interpreter::interpreter::EthInterpreter;
+use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
+use revm::interpreter::{
+    CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+};
+use revm::primitives::{Address, Log, U256};
+use revm::state::Account;
+use revm::{Context, InspectEvm, MainContext};
+use std::convert::Infallible;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let mut engine = isolate::Engine::new();
+pub struct Engine {
+    evm: Evm<Context, Tracer, EthInstructions<EthInterpreter, Context>, EthPrecompiles>,
+}
 
-    engine.create_account(
-        address!("ffffffffffffffffffffffffffffffffffffffff"),
-        AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
-            &[
-                0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00, 0x60,
-                0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
-            ][..],
-        ))),
-    );
+impl Engine {
+    pub fn new() -> Self {
+        let evm = Evm::new_with_inspector(
+            Context::mainnet().with_db(EmptyDB::default()),
+            Tracer::new(),
+            EthInstructions::new_mainnet(),
+            EthPrecompiles::default(),
+        );
 
-    engine.create_account(
-        address!("00000000000000000000000000000000000000ff"),
-        AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
-            &[opcode::PUSH2, 0xbe, 0xef, opcode::STOP][..],
-        ))),
-    );
+        Self { evm }
+    }
 
-    // TODO(toms): prestate - block environment?
+    pub fn create_account(&mut self, address: Address, account: impl Into<Account>) {
+        self.evm.journal().state().insert(address, account.into());
+    }
 
-    let _ = engine.execute(TxEnv {
-        kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
-        gas_limit: 0x1000000,
-        // tx_type: 0,
-        // caller: Address::default(),
-        // gas_limit: 30_000_000,
-        // gas_price: 0,
-        // kind: TxKind::Call(Address::default()),
-        // value: U256::ZERO,
-        // data: Bytes::default(),
-        // nonce: 0,
-        // chain_id: Some(1), // Mainnet chain ID is 1
-        // access_list: Default::default(),
-        // gas_priority_fee: Some(0),
-        // blob_hashes: Vec::new(),
-        // max_fee_per_blob_gas: 0,
-        // authorization_list: Vec::new(),
-        ..Default::default()
-    });
+    pub fn execute(&mut self, tx: TxEnv) -> Result<ResultAndState, EVMError<Infallible>> {
+        // NOTE(toms): gas costs will include 'base stipend' (21000)
 
-    Ok(())
+        self.evm.inspect_with_tx(tx)
+    }
+}
+
+pub struct Tracer {
+    _unused: (),
+}
+
+impl Tracer {
+    pub fn new() -> Self {
+        Self { _unused: () }
+    }
+}
+
+impl revm::Inspector<Context> for Tracer {
+    fn initialize_interp(&mut self, _interpreter: &mut Interpreter, ctx: &mut Context) {
+        // TODO(toms): include initial stipend, etc. (InitialAndFloorGas) in trace log?
+        println!(
+            ">>> initialize_interp: {:#?}",
+            (&ctx.tx, &ctx.block, &ctx.cfg)
+        );
+    }
+
+    fn step(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
+        let pc = interpreter.bytecode.pc();
+        let opcode = interpreter.bytecode.opcode();
+        let stack = interpreter.stack.data();
+        let gas_remaining = interpreter.control.gas().remaining();
+        println!(
+            "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
+            interpreter.memory.size()
+        );
+    }
+
+    fn step_end(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
+        // println!(">>> step_end");
+    }
+
+    fn log(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context, _log: Log) {
+        println!(">>> log");
+    }
+
+    fn call(&mut self, _ctx: &mut Context, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+        println!(">>> call");
+        None
+    }
+
+    fn call_end(&mut self, _ctx: &mut Context, _inputs: &CallInputs, _outcome: &mut CallOutcome) {
+        println!(">>> call_end");
+    }
+
+    fn create(&mut self, _ctx: &mut Context, _inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        println!(">>> create");
+        None
+    }
+
+    fn create_end(
+        &mut self,
+        _ctx: &mut Context,
+        _inputs: &CreateInputs,
+        _outcome: &mut CreateOutcome,
+    ) {
+        println!(">>> create_end");
+    }
+
+    fn eofcreate(
+        &mut self,
+        _ctx: &mut Context,
+        _inputs: &mut EOFCreateInputs,
+    ) -> Option<CreateOutcome> {
+        println!(">>> eofcreate");
+        None
+    }
+
+    fn eofcreate_end(
+        &mut self,
+        _ctx: &mut Context,
+        _inputs: &EOFCreateInputs,
+        _outcome: &mut CreateOutcome,
+    ) {
+        println!(">>> eofcreate_end");
+    }
+
+    fn selfdestruct(&mut self, _contract: Address, _target: Address, _value: U256) {
+        println!(">>> selfdestruct");
+    }
 }
 
 // TODO(toms): tests!
@@ -166,139 +241,57 @@ async fn main() -> anyhow::Result<()> {
 //   * How does SELFDESTRUCT work?
 //   * Authorization list? Access list?
 
-mod isolate {
-    use revm::context::result::{EVMError, ResultAndState};
-    use revm::context::{ContextTr, Evm, TxEnv};
-    use revm::database::EmptyDB;
-    use revm::handler::EthPrecompiles;
-    use revm::handler::instructions::EthInstructions;
-    use revm::interpreter::interpreter::EthInterpreter;
-    use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
-    use revm::interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
-    };
-    use revm::primitives::{Address, Log, U256};
-    use revm::state::Account;
-    use revm::{Context, InspectEvm, MainContext};
-    use std::convert::Infallible;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use revm::bytecode::{Bytecode, opcode};
+    use revm::context::TxEnv;
+    use revm::primitives::{Bytes, TxKind, address};
+    use revm::state::AccountInfo;
 
-    pub struct Engine {
-        evm: Evm<Context, Tracer, EthInstructions<EthInterpreter, Context>, EthPrecompiles>,
-    }
+    #[test]
+    fn simple() {
+        let mut engine = Engine::new();
 
-    impl Engine {
-        pub fn new() -> Self {
-            let evm = Evm::new_with_inspector(
-                Context::mainnet().with_db(EmptyDB::default()),
-                Tracer::new(),
-                EthInstructions::new_mainnet(),
-                EthPrecompiles::default(),
-            );
+        engine.create_account(
+            address!("ffffffffffffffffffffffffffffffffffffffff"),
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+                &[
+                    0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00,
+                    0x60, 0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
+                ][..],
+            ))),
+        );
 
-            Self { evm }
-        }
+        engine.create_account(
+            address!("00000000000000000000000000000000000000ff"),
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+                &[opcode::PUSH2, 0xbe, 0xef, opcode::STOP][..],
+            ))),
+        );
 
-        pub fn create_account(&mut self, address: Address, account: impl Into<Account>) {
-            self.evm.journal().state().insert(address, account.into());
-        }
+        // TODO(toms): prestate - block environment?
 
-        pub fn execute(&mut self, tx: TxEnv) -> Result<ResultAndState, EVMError<Infallible>> {
-            // NOTE(toms): gas costs will include 'base stipend' (21000)
-
-            self.evm.inspect_with_tx(tx)
-        }
-    }
-
-    pub struct Tracer {
-        _unused: (),
-    }
-
-    impl Tracer {
-        pub fn new() -> Self {
-            Self { _unused: () }
-        }
-    }
-
-    impl revm::Inspector<Context> for Tracer {
-        fn initialize_interp(&mut self, _interpreter: &mut Interpreter, ctx: &mut Context) {
-            // TODO(toms): include initial stipend, etc. (InitialAndFloorGas) in trace log?
-            println!(
-                ">>> initialize_interp: {:#?}",
-                (&ctx.tx, &ctx.block, &ctx.cfg)
-            );
-        }
-
-        fn step(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
-            let pc = interpreter.bytecode.pc();
-            let opcode = interpreter.bytecode.opcode();
-            let stack = interpreter.stack.data();
-            let gas_remaining = interpreter.control.gas().remaining();
-            println!(
-                "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
-                interpreter.memory.size()
-            );
-        }
-
-        fn step_end(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
-            // println!(">>> step_end");
-        }
-
-        fn log(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context, _log: Log) {
-            println!(">>> log");
-        }
-
-        fn call(&mut self, _ctx: &mut Context, _inputs: &mut CallInputs) -> Option<CallOutcome> {
-            println!(">>> call");
-            None
-        }
-
-        fn call_end(
-            &mut self,
-            _ctx: &mut Context,
-            _inputs: &CallInputs,
-            _outcome: &mut CallOutcome,
-        ) {
-            println!(">>> call_end");
-        }
-
-        fn create(
-            &mut self,
-            _ctx: &mut Context,
-            _inputs: &mut CreateInputs,
-        ) -> Option<CreateOutcome> {
-            println!(">>> create");
-            None
-        }
-
-        fn create_end(
-            &mut self,
-            _ctx: &mut Context,
-            _inputs: &CreateInputs,
-            _outcome: &mut CreateOutcome,
-        ) {
-            println!(">>> create_end");
-        }
-
-        fn eofcreate(
-            &mut self,
-            _ctx: &mut Context,
-            _inputs: &mut EOFCreateInputs,
-        ) -> Option<CreateOutcome> {
-            println!(">>> eofcreate");
-            None
-        }
-
-        fn eofcreate_end(
-            &mut self,
-            _ctx: &mut Context,
-            _inputs: &EOFCreateInputs,
-            _outcome: &mut CreateOutcome,
-        ) {
-            println!(">>> eofcreate_end");
-        }
-
-        fn selfdestruct(&mut self, _contract: Address, _target: Address, _value: U256) {
-            println!(">>> selfdestruct");
-        }
+        let _ = engine
+            .execute(TxEnv {
+                kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+                gas_limit: 0x1000000,
+                // tx_type: 0,
+                // caller: Address::default(),
+                // gas_limit: 30_000_000,
+                // gas_price: 0,
+                // kind: TxKind::Call(Address::default()),
+                // value: U256::ZERO,
+                // data: Bytes::default(),
+                // nonce: 0,
+                // chain_id: Some(1), // Mainnet chain ID is 1
+                // access_list: Default::default(),
+                // gas_priority_fee: Some(0),
+                // blob_hashes: Vec::new(),
+                // max_fee_per_blob_gas: 0,
+                // authorization_list: Vec::new(),
+                ..Default::default()
+            })
+            .unwrap();
     }
 }

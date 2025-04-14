@@ -1,0 +1,6 @@
+[package]
+name = "engine"
+edition = "2024"
+
+[dependencies]
+revm = { version = "22", features = ["serde-json"] }
