@@ -45,46 +45,6 @@ type LegacyTx struct {
 }
 */
 
-// https://eips.ethereum.org/EIPS/eip-3155#test-cases
-//
-// λ evm run --code '0x604080536040604055604060006040600060ff5afa6040f3'
-//     --json --debug --dump --nomemory=false --noreturndata=false
-//     --sender '0xF0' --receiver '0xF1' --gas 10000000000
-//
-// {"opName":"PUSH1","pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0}
-// {"opName":"DUP1","pc":2,"op":128,"gas":"0x2540be3fd","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0}
-// {"opName":"MSTORE8","pc":3,"op":83,"gas":"0x2540be3fa","gasCost":"0xc","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0}
-// {"opName":"PUSH1","pc":4,"op":96,"gas":"0x2540be3ee","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":6,"op":96,"gas":"0x2540be3eb","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"SSTORE","pc":8,"op":85,"gas":"0x2540be3e8","gasCost":"0x5654","memSize":96,"stack":["0x40","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":9,"op":96,"gas":"0x2540b8d94","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":11,"op":96,"gas":"0x2540b8d91","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":13,"op":96,"gas":"0x2540b8d8e","gasCost":"0x3","memSize":96,"stack":["0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":15,"op":96,"gas":"0x2540b8d8b","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":17,"op":96,"gas":"0x2540b8d88","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"GAS","pc":19,"op":90,"gas":"0x2540b8d85","gasCost":"0x2","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"STATICCALL","pc":20,"op":250,"gas":"0x2540b8d83","gasCost":"0x24abb5f76","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff","0x2540b8d83"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"PUSH1","pc":21,"op":96,"gas":"0x2540b835b","gasCost":"0x3","memSize":96,"stack":["0x1"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"opName":"RETURN","pc":23,"op":243,"gas":"0x2540b8358","gasCost":"0x0","memSize":96,"stack":["0x1","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-// {"output":"40","gasUsed":"0x60a8"}
-// {
-//     "root": "3463104800c5985b196eb96437cdff04e0a669d85a898ff68924353b5f973597",
-//     "accounts": {
-//         "0x00000000000000000000000000000000000000f1": {
-//             "balance": "0",
-//             "nonce": 0,
-//             "root": "0x362d2b556fc3ace7e6b0a2d2ddd306a7bc0cc299f5264d9abd557cde6cd2dbf2",
-//             "codeHash": "0x58c35e4d81bf6b27e1725f0b3c3364b849bace3196710ee574714da41310b492",
-//             "code": "0x604080536040604055604060006040600060ff5afa6040f3",
-//             "storage": {
-//                 "0x0000000000000000000000000000000000000000000000000000000000000040": "40"
-//             },
-//             "address": "0x00000000000000000000000000000000000000f1",
-//             "key": "0xe8c07bab8822eeeb875236e148f781341157f9bfc56c1c53972489ff4009695b"
-//         }
-//     }
-// }
-
 // NOTE(toms): In EVM, it's interesting what happens with a CALL occurs to an address that
 //   either doesn't exist, or doesn't have any code. It's a valid call, and then VM continues
 //   with defined behavior.
@@ -100,6 +60,7 @@ use revm::context::{ContextTr, Evm, TxEnv};
 use revm::database::EmptyDB;
 use revm::handler::EthPrecompiles;
 use revm::handler::instructions::EthInstructions;
+use revm::inspector::InspectorEvmTr;
 use revm::interpreter::interpreter::EthInterpreter;
 use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
 use revm::interpreter::{
@@ -107,23 +68,27 @@ use revm::interpreter::{
 };
 use revm::primitives::{Address, Log, U256};
 use revm::state::Account;
-use revm::{Context, InspectEvm, MainContext};
+use revm::{Context, InspectEvm, Inspector, MainContext};
 use std::convert::Infallible;
 
-pub struct Engine {
-    evm: Evm<Context, Tracer, EthInstructions<EthInterpreter, Context>, EthPrecompiles>,
+pub struct Engine<I> {
+    evm: Evm<Context, I, EthInstructions<EthInterpreter, Context>, EthPrecompiles>,
 }
 
-impl Engine {
-    pub fn new() -> Self {
+impl<I: Inspector<Context>> Engine<I> {
+    pub fn new(inspector: I) -> Self {
         let evm = Evm::new_with_inspector(
             Context::mainnet().with_db(EmptyDB::default()),
-            Tracer::new(),
+            inspector, // Tracer::new(),
             EthInstructions::new_mainnet(),
             EthPrecompiles::default(),
         );
 
         Self { evm }
+    }
+
+    pub fn inspector(&mut self) -> &mut I {
+        self.evm.inspector()
     }
 
     pub fn create_account(&mut self, address: Address, account: impl Into<Account>) {
@@ -137,21 +102,35 @@ impl Engine {
     }
 }
 
-pub struct Tracer {
-    _unused: (),
+#[derive(Debug, PartialEq)]
+pub enum Event {
+    Step {
+        pc: usize,
+        opcode: u8,
+        stack: Box<[U256]>,
+        gas_remaining: u64,
+    },
 }
 
-impl Tracer {
-    pub fn new() -> Self {
-        Self { _unused: () }
+pub trait TracerDelegate {
+    fn emit(&mut self, event: Event);
+}
+
+pub struct Tracer<D> {
+    delegate: D,
+}
+
+impl<D> Tracer<D> {
+    pub fn new(delegate: D) -> Self {
+        Self { delegate }
     }
 }
 
-impl revm::Inspector<Context> for Tracer {
+impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
     fn initialize_interp(&mut self, _interpreter: &mut Interpreter, ctx: &mut Context) {
         // TODO(toms): include initial stipend, etc. (InitialAndFloorGas) in trace log?
         println!(
-            ">>> initialize_interp: {:#?}",
+            ">>> initialize_interp: {:?}",
             (&ctx.tx, &ctx.block, &ctx.cfg)
         );
     }
@@ -161,10 +140,17 @@ impl revm::Inspector<Context> for Tracer {
         let opcode = interpreter.bytecode.opcode();
         let stack = interpreter.stack.data();
         let gas_remaining = interpreter.control.gas().remaining();
-        println!(
-            "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
-            interpreter.memory.size()
-        );
+        // println!(
+        //     "pc={pc:?} opcode={opcode:?} stack={stack:?} memSize={} gas_remaining=0x{gas_remaining:x}",
+        //     interpreter.memory.size()
+        // );
+
+        self.delegate.emit(Event::Step {
+            pc,
+            opcode,
+            stack: stack.clone().into_boxed_slice(),
+            gas_remaining,
+        });
     }
 
     fn step_end(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context) {
@@ -246,12 +232,186 @@ mod tests {
     use super::*;
     use revm::bytecode::{Bytecode, opcode};
     use revm::context::TxEnv;
+    use revm::context::result::{Output, SuccessReason};
+    use revm::context_interface::result::ExecutionResult;
     use revm::primitives::{Bytes, TxKind, address};
     use revm::state::AccountInfo;
 
+    #[derive(Default)]
+    struct TestDelegate {
+        events: Vec<Event>,
+    }
+    impl TracerDelegate for TestDelegate {
+        fn emit(&mut self, event: Event) {
+            self.events.push(event);
+        }
+    }
+
+    // TODO(toms): use external JSONL files as harnesses for tests (for input and output)
+
+    #[test]
+    fn example() {
+        let mut engine = Engine::new(Tracer::new(TestDelegate::default()));
+
+        engine.create_account(
+            address!("ffffffffffffffffffffffffffffffffffffffff"),
+            AccountInfo::from_bytecode(Bytecode::new_raw(Bytes::from(
+                &[
+                    0x60, 0x40, 0x80, 0x53, 0x60, 0x40, 0x60, 0x40, 0x55, 0x60, 0x40, 0x60, 0x00,
+                    0x60, 0x40, 0x60, 0x00, 0x60, 0xff, 0x5a, 0xfa, 0x60, 0x40, 0xf3,
+                ][..],
+            ))),
+        );
+
+        // TODO(toms): prestate - block environment?
+
+        let result = engine
+            .execute(TxEnv {
+                kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+                gas_limit: 0x1000000,
+                ..Default::default()
+            })
+            .unwrap();
+
+        fn stack(values: impl IntoIterator<Item = u64>) -> Box<[U256]> {
+            values.into_iter().map(U256::from).collect()
+        }
+
+        // https://eips.ethereum.org/EIPS/eip-3155#test-cases
+        //
+        // λ evm run --code '0x604080536040604055604060006040600060ff5afa6040f3'
+        //     --json --debug --dump --nomemory=false --noreturndata=false
+        //     --sender '0xF0' --receiver '0xF1' --gas 10000000000
+        //
+        // {"opName":"PUSH1","pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0}
+        // {"opName":"DUP1","pc":2,"op":128,"gas":"0x2540be3fd","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0}
+        // {"opName":"MSTORE8","pc":3,"op":83,"gas":"0x2540be3fa","gasCost":"0xc","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0}
+        // {"opName":"PUSH1","pc":4,"op":96,"gas":"0x2540be3ee","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":6,"op":96,"gas":"0x2540be3eb","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"SSTORE","pc":8,"op":85,"gas":"0x2540be3e8","gasCost":"0x5654","memSize":96,"stack":["0x40","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":9,"op":96,"gas":"0x2540b8d94","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":11,"op":96,"gas":"0x2540b8d91","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":13,"op":96,"gas":"0x2540b8d8e","gasCost":"0x3","memSize":96,"stack":["0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":15,"op":96,"gas":"0x2540b8d8b","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":17,"op":96,"gas":"0x2540b8d88","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"GAS","pc":19,"op":90,"gas":"0x2540b8d85","gasCost":"0x2","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"STATICCALL","pc":20,"op":250,"gas":"0x2540b8d83","gasCost":"0x24abb5f76","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff","0x2540b8d83"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"PUSH1","pc":21,"op":96,"gas":"0x2540b835b","gasCost":"0x3","memSize":96,"stack":["0x1"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"opName":"RETURN","pc":23,"op":243,"gas":"0x2540b8358","gasCost":"0x0","memSize":96,"stack":["0x1","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
+        // {"output":"40","gasUsed":"0x60a8"}
+
+        // TODO(toms): check result.state?
+        assert_eq!(
+            result.result,
+            ExecutionResult::Success {
+                reason: SuccessReason::Return,
+                gas_used: 0x60a8 + 21000, // include base stipend
+                gas_refunded: 0,
+                logs: vec![],
+                output: Output::Call([0x40].into()),
+            }
+        );
+
+        assert_eq!(
+            engine.inspector().delegate.events,
+            &[
+                Event::Step {
+                    pc: 0,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([]),
+                    gas_remaining: 16756216
+                },
+                Event::Step {
+                    pc: 2,
+                    opcode: opcode::DUP1, // 128
+                    stack: stack([64]),
+                    gas_remaining: 16756213
+                },
+                Event::Step {
+                    pc: 3,
+                    opcode: opcode::MSTORE8, // 83
+                    stack: stack([64, 64]),
+                    gas_remaining: 16756210
+                },
+                Event::Step {
+                    pc: 4,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([]),
+                    gas_remaining: 16756198
+                },
+                Event::Step {
+                    pc: 6,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([64]),
+                    gas_remaining: 16756195
+                },
+                Event::Step {
+                    pc: 8,
+                    opcode: opcode::SSTORE, // 85
+                    stack: stack([64, 64]),
+                    gas_remaining: 16756192
+                },
+                Event::Step {
+                    pc: 9,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([]),
+                    gas_remaining: 16734092
+                },
+                Event::Step {
+                    pc: 11,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([64]),
+                    gas_remaining: 16734089
+                },
+                Event::Step {
+                    pc: 13,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([64, 0]),
+                    gas_remaining: 16734086
+                },
+                Event::Step {
+                    pc: 15,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([64, 0, 64]),
+                    gas_remaining: 16734083
+                },
+                Event::Step {
+                    pc: 17,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([64, 0, 64, 0]),
+                    gas_remaining: 16734080
+                },
+                Event::Step {
+                    pc: 19,
+                    opcode: opcode::GAS, // 90
+                    stack: stack([64, 0, 64, 0, 255]),
+                    gas_remaining: 16734077
+                },
+                Event::Step {
+                    pc: 20,
+                    opcode: opcode::STATICCALL, // 250
+                    stack: stack([64, 0, 64, 0, 255, 16734075]),
+                    gas_remaining: 16734075
+                },
+                Event::Step {
+                    pc: 21,
+                    opcode: opcode::PUSH1, // 96
+                    stack: stack([1]),
+                    gas_remaining: 16731475
+                },
+                Event::Step {
+                    pc: 23,
+                    opcode: opcode::RETURN, // 243
+                    stack: stack([1, 64]),
+                    gas_remaining: 16731472
+                }
+            ]
+        );
+    }
+
     #[test]
     fn simple() {
-        let mut engine = Engine::new();
+        let mut engine = Engine::new(Tracer::new(TestDelegate::default()));
 
         engine.create_account(
             address!("ffffffffffffffffffffffffffffffffffffffff"),
