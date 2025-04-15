@@ -238,6 +238,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
 //   * SELFDESTRUCT
 //   * KECCAK256
 //   * EOF?
+//   * Run the code for a _real_ program - ERC-20? key-value store?
 
 // TODO(toms): open questions
 //   * What are all the 'inputs' for a smart code execution?
