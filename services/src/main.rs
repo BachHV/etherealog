@@ -7,10 +7,18 @@ use revm::{
 };
 use rocket::{
     fs::{FileServer, Options},
-    serde::{Serialize, json::Json},
+    serde::json::Json,
 };
 use rocket_okapi::{rapidoc::*, settings::UrlObject, swagger_ui::*};
 use std::str::FromStr;
+
+// TODO(toms): 'test' endpoints
+//   * POST /api/health-check
+// TODO(toms): 'isolate' endpoints
+//   * POST /api/isolate/transaction - execute a transaction in a given state/environment
+//     * prestate - block environment?
+
+// https://learn.openapis.org/examples/v3.0/petstore.html
 
 #[derive(Default)]
 struct Delegate {
@@ -23,7 +31,7 @@ impl TracerDelegate for Delegate {
     }
 }
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 struct Response {
     events: Vec<Event>,
 }
@@ -32,8 +40,10 @@ struct Response {
 fn eval(code: &str) -> Result<Json<Response>, String> {
     let mut engine = Engine::new(Tracer::new(Delegate::default()));
 
+    let addr = address!("ffffffffffffffffffffffffffffffffffffffff");
+
     engine.create_account(
-        address!("ffffffffffffffffffffffffffffffffffffffff"),
+        addr,
         AccountInfo::from_bytecode(Bytecode::new_raw(
             Bytes::from_str(code).map_err(|err| err.to_string())?,
         )),
@@ -41,7 +51,7 @@ fn eval(code: &str) -> Result<Json<Response>, String> {
 
     let _ = engine
         .execute(TxEnv {
-            kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+            kind: TxKind::Call(addr),
             gas_limit: 0x1000000,
             ..Default::default()
         })
@@ -52,16 +62,45 @@ fn eval(code: &str) -> Result<Json<Response>, String> {
     }))
 }
 
-// TODO(toms): 'test' endpoints
-//   * POST /api/health-check
-// TODO(toms): 'isolate' endpoints
-//   * POST /api/isolate/transaction - execute a transaction in a given state/environment
-//     * prestate - block environment?
+#[derive(Debug, serde::Deserialize)]
+struct Transaction {
+    foo: String,
+    bar: String,
+}
+
+#[rocket::post("/api/isolate/transaction", data = "<transaction>")]
+fn transaction(transaction: Json<Transaction>) -> Result<Json<Response>, String> {
+    let mut engine = Engine::new(Tracer::new(Delegate::default()));
+
+    let transaction = transaction.0;
+    println!("transaction={transaction:?}");
+
+    let addr = address!("ffffffffffffffffffffffffffffffffffffffff");
+
+    engine.create_account(
+        addr,
+        AccountInfo::from_bytecode(Bytecode::new_raw(
+            Bytes::from_str("6040").map_err(|err| err.to_string())?,
+        )),
+    );
+
+    let _ = engine
+        .execute(TxEnv {
+            kind: TxKind::Call(addr),
+            gas_limit: 0x1000000,
+            ..Default::default()
+        })
+        .map_err(|err| err.to_string())?;
+
+    Ok(Json(Response {
+        events: engine.inspector().get().events.split_off(0),
+    }))
+}
 
 #[rocket::launch]
 fn rocket() -> _ {
     rocket::build()
-        .mount("/", rocket::routes![eval])
+        .mount("/", rocket::routes![eval, transaction])
         .mount("/res", FileServer::new("res", Options::default()))
         .mount(
             "/swagger-ui/",
@@ -74,7 +113,7 @@ fn rocket() -> _ {
             "/rapidoc/",
             make_rapidoc(&RapiDocConfig {
                 general: GeneralConfig {
-                    spec_urls: vec![UrlObject::new("General", "/openapi.json")],
+                    spec_urls: vec![UrlObject::new("General", "/res/openapi.json")],
                     ..Default::default()
                 },
                 hide_show: HideShowConfig {

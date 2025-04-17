@@ -49,6 +49,15 @@
             "application/json": {
               "schema": {
                 "type": "object"
+              },
+              "examples": {
+                "foo": {
+                  "summary": "...",
+                  "value": {
+                    "foo": "foo-bar",
+                    "bar": "baz-buz"
+                  }
+                }
               }
             }
           }
