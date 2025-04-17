@@ -1065,6 +1065,7 @@ name = "engine"
 version = "0.0.0"
 dependencies = [
  "revm",
+ "serde",
 ]
 
 [[package]]
@@ -2908,8 +2909,11 @@ name = "services"
 version = "0.0.0"
 dependencies = [
  "engine",
+ "revm",
  "rocket",
  "rocket_okapi",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

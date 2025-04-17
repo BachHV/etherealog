@@ -1,29 +1,72 @@
-use rocket::get;
-use rocket_okapi::settings::UrlObject;
-use rocket_okapi::{openapi, openapi_get_routes, rapidoc::*, swagger_ui::*};
+use engine::{Engine, Event, Tracer, TracerDelegate};
+use revm::{
+    bytecode::Bytecode,
+    context::TxEnv,
+    primitives::{Bytes, TxKind, address},
+    state::AccountInfo,
+};
+use rocket::{
+    fs::{FileServer, Options},
+    serde::{Serialize, json::Json},
+};
+use rocket_okapi::{rapidoc::*, settings::UrlObject, swagger_ui::*};
+use std::str::FromStr;
 
-// OpenAPI: https://github.com/GREsau/okapi/blob/master/examples/json-web-api/src/main.rs
+#[derive(Default)]
+struct Delegate {
+    events: Vec<Event>,
+}
 
-#[openapi]
-#[get("/hello/<name>/<age>")]
-fn hello(name: &str, age: u8) -> String {
-    format!("Hello, {} year old named {}!", age, name)
+impl TracerDelegate for Delegate {
+    fn emit(&mut self, event: Event) {
+        self.events.push(event);
+    }
+}
+
+#[derive(Serialize)]
+struct Response {
+    events: Vec<Event>,
+}
+
+#[rocket::post("/api/isolate/eval/<code>")]
+fn eval(code: &str) -> Result<Json<Response>, String> {
+    let mut engine = Engine::new(Tracer::new(Delegate::default()));
+
+    engine.create_account(
+        address!("ffffffffffffffffffffffffffffffffffffffff"),
+        AccountInfo::from_bytecode(Bytecode::new_raw(
+            Bytes::from_str(code).map_err(|err| err.to_string())?,
+        )),
+    );
+
+    let _ = engine
+        .execute(TxEnv {
+            kind: TxKind::Call(address!("ffffffffffffffffffffffffffffffffffffffff")),
+            gas_limit: 0x1000000,
+            ..Default::default()
+        })
+        .map_err(|err| err.to_string())?;
+
+    Ok(Json(Response {
+        events: engine.inspector().get().events.split_off(0),
+    }))
 }
 
 // TODO(toms): 'test' endpoints
 //   * POST /api/health-check
 // TODO(toms): 'isolate' endpoints
 //   * POST /api/isolate/transaction - execute a transaction in a given state/environment
-//   * POST /api/isolate/code - execute raw (EVM) code
+//     * prestate - block environment?
 
 #[rocket::launch]
 fn rocket() -> _ {
     rocket::build()
-        .mount("/", openapi_get_routes![hello])
+        .mount("/", rocket::routes![eval])
+        .mount("/res", FileServer::new("res", Options::default()))
         .mount(
             "/swagger-ui/",
             make_swagger_ui(&SwaggerUIConfig {
-                url: "../openapi.json".to_owned(),
+                url: "/res/openapi.json".to_owned(),
                 ..Default::default()
             }),
         )
@@ -31,7 +74,7 @@ fn rocket() -> _ {
             "/rapidoc/",
             make_rapidoc(&RapiDocConfig {
                 general: GeneralConfig {
-                    spec_urls: vec![UrlObject::new("General", "../openapi.json")],
+                    spec_urls: vec![UrlObject::new("General", "/openapi.json")],
                     ..Default::default()
                 },
                 hide_show: HideShowConfig {

@@ -69,6 +69,7 @@ use revm::interpreter::{
 use revm::primitives::{Address, Log, U256};
 use revm::state::Account;
 use revm::{Context, InspectEvm, Inspector, MainContext};
+use serde::Serialize;
 use std::convert::Infallible;
 
 pub struct Engine<I> {
@@ -117,7 +118,9 @@ impl<I: Inspector<Context>> Engine<I> {
 //   * memory
 //   * storage
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum Event {
     Step {
         pc: usize,
@@ -146,6 +149,10 @@ pub struct Tracer<D> {
 impl<D> Tracer<D> {
     pub fn new(delegate: D) -> Self {
         Self { delegate }
+    }
+
+    pub fn get(&mut self) -> &mut D {
+        &mut self.delegate
     }
 }
 
