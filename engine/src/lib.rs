@@ -82,7 +82,7 @@ impl<I: Inspector<Context>> Engine<I> {
         Self {
             evm: Evm::new_with_inspector(
                 Context::mainnet().with_db(EmptyDB::default()),
-                inspector, // Tracer::new(),
+                inspector,
                 EthInstructions::new_mainnet(),
                 EthPrecompiles::default(),
             ),
@@ -147,6 +147,7 @@ pub struct Step {
     /// Description of an error (should contain revert reason if supported)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    // TODO(toms): array? string?
     /// Array of all allocated values
     #[serde(default, skip_serializing_if = "Option::is_none")]
     memory: Option<String>,
