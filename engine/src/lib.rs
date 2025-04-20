@@ -201,10 +201,10 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
             .initialize_interp(interpreter.control.gas());
 
         // TODO(toms): include initial stipend, etc. (InitialAndFloorGas) in trace log?
-        println!(
-            ">>> initialize_interp: {:?}",
-            (&ctx.tx, &ctx.block, &ctx.cfg)
-        );
+        // println!(
+        //     ">>> initialize_interp: {:?}",
+        //     (&ctx.tx, &ctx.block, &ctx.cfg)
+        // );
     }
 
     fn step(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
@@ -263,18 +263,17 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
             gas: step.gas,
             gas_cost: self.gas_inspector.last_gas_cost(),
             depth: ctx.journal().depth() as u64,
-            //             section: self.section,
-            //             function_depth: self.function_depth,
-            //             return_data: "0x",
-            //             refund: self.refunded as u64,
-            error: interpreter
-                .control
-                .instruction_result()
-                .is_error()
-                .then(|| format!("{:?}", interpreter.control.instruction_result())),
-            //             memory: self.memory.take(),
-            //             storage: None,
-            //             return_stack: None,
+            // section: self.section,
+            // function_depth: self.function_depth,
+            // return_data: "0x",
+            // refund: self.refunded as u64,
+            error: {
+                let result = interpreter.control.instruction_result();
+                (result.is_error() || result.is_revert()).then(|| format!("{:?}", result))
+            },
+            // memory: self.memory.take(),
+            // storage: None,
+            // return_stack: None,
         }));
     }
 
