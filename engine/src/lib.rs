@@ -120,41 +120,47 @@ impl<I: Inspector<Context>> Engine<I> {
 //   * storage
 
 #[derive(Debug, PartialEq)]
-pub struct Step {
+struct Step {
     pc: usize,
     op: u8,
     gas: u64,
     stack: Box<[U256]>,
 }
 
+#[derive(Debug, Default, PartialEq, Serialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
+pub struct StepEnd {
+    /// Program Counter
+    pc: usize,
+    /// OpCode
+    op: u8,
+    /// Gas left before executing this operation
+    gas: u64, // U256,
+    /// Gas cost of this operation
+    gas_cost: u64, // U256,
+    /// Array of all values on the stack
+    stack: Box<[U256]>,
+    /// Depth of the call stack
+    depth: u64,
+    // /// Data returned by function call
+    // return_data: Hex-String,
+    // /// Amount of global gas refunded
+    // refund: U256,
+    /// Description of an error (should contain revert reason if supported)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    // /// Array of all allocated values
+    // memory: Array of Hex-Strings,
+    // /// Array of all stored values
+    // storage: Key-Value,
+}
+
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum Event {
-    Step {
-        /// Program Counter
-        pc: usize,
-        /// OpCode
-        op: u8,
-        /// Gas left before executing this operation
-        gas: u64, // U256,
-        /// Gas cost of this operation
-        gas_cost: u64, // U256,
-        /// Array of all values on the stack
-        stack: Box<[U256]>,
-        /// Depth of the call stack
-        depth: u64,
-        // /// Data returned by function call
-        // return_data: Hex-String,
-        // /// Amount of global gas refunded
-        // refund: U256,
-        // /// Description of an error (should contain revert reason if supported)
-        // error: Hex-String,
-        // /// Array of all allocated values
-        // memory: Array of Hex-Strings,
-        // /// Array of all stored values
-        // storage: Key-Value,
-    },
+    Step(StepEnd),
 }
 
 // TODO(toms): Summary (from https://eips.ethereum.org/EIPS/eip-3155)
@@ -250,7 +256,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
 
         let step = self.step.take().unwrap();
 
-        self.delegate.emit(Event::Step {
+        self.delegate.emit(Event::Step(StepEnd {
             pc: step.pc,
             op: step.op,
             stack: step.stack,
@@ -261,12 +267,15 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
             //             function_depth: self.function_depth,
             //             return_data: "0x",
             //             refund: self.refunded as u64,
-            //             error: (!interp.control.instruction_result().is_ok())
-            //                 .then(|| format!("{:?}", interp.control.instruction_result())),
+            error: interpreter
+                .control
+                .instruction_result()
+                .is_error()
+                .then(|| format!("{:?}", interpreter.control.instruction_result())),
             //             memory: self.memory.take(),
             //             storage: None,
             //             return_stack: None,
-        });
+        }));
     }
 
     fn log(&mut self, _interpreter: &mut Interpreter, _ctx: &mut Context, _log: Log) {
@@ -476,126 +485,141 @@ mod tests {
         assert_eq!(
             engine.inspector().delegate.events,
             &[
-                Event::Step {
+                Event::Step(StepEnd {
                     pc: 0,
                     op: opcode::PUSH1, // 96
                     gas: 16756216,
                     gas_cost: 3,
                     stack: stack([]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 2,
                     op: opcode::DUP1, // 128
                     gas: 16756213,
                     gas_cost: 3,
                     stack: stack([64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 3,
                     op: opcode::MSTORE8, // 83
                     gas: 16756210,
                     gas_cost: 12,
                     stack: stack([64, 64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 4,
                     op: opcode::PUSH1, // 96
                     gas: 16756198,
                     gas_cost: 3,
                     stack: stack([]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 6,
                     op: opcode::PUSH1, // 96
                     gas: 16756195,
                     gas_cost: 3,
                     stack: stack([64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 8,
                     op: opcode::SSTORE, // 85
                     gas: 16756192,
                     gas_cost: 22100,
                     stack: stack([64, 64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 9,
                     op: opcode::PUSH1, // 96
                     gas: 16734092,
                     gas_cost: 3,
                     stack: stack([]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 11,
                     op: opcode::PUSH1, // 96
                     gas: 16734089,
                     gas_cost: 3,
                     stack: stack([64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 13,
                     op: opcode::PUSH1, // 96
                     gas: 16734086,
                     gas_cost: 3,
                     stack: stack([64, 0]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 15,
                     op: opcode::PUSH1, // 96
                     gas: 16734083,
                     gas_cost: 3,
                     stack: stack([64, 0, 64]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 17,
                     op: opcode::PUSH1, // 96
                     gas: 16734080,
                     gas_cost: 3,
                     stack: stack([64, 0, 64, 0]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 19,
                     op: opcode::GAS, // 90
                     gas: 16734077,
                     gas_cost: 2,
                     stack: stack([64, 0, 64, 0, 255]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 20,
                     op: opcode::STATICCALL, // 250
                     gas: 16734075,
                     gas_cost: 16472646,
                     stack: stack([64, 0, 64, 0, 255, 16734075]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 21,
                     op: opcode::PUSH1, // 96
                     gas: 16731475,
                     gas_cost: 3,
                     stack: stack([1]),
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 23,
                     op: opcode::RETURN, // 243
                     gas: 16731472,
                     gas_cost: 0,
                     stack: stack([1, 64]),
-                    depth: 1
-                }
+                    depth: 1,
+                    ..Default::default()
+                })
             ]
         );
     }
@@ -659,22 +683,24 @@ mod tests {
         assert_eq!(
             engine.inspector().delegate.events,
             &[
-                Event::Step {
+                Event::Step(StepEnd {
                     pc: 0,
                     op: opcode::PUSH1, // 96
                     stack: stack([]),
                     gas: 29979000,
                     gas_cost: 3,
-                    depth: 1
-                },
-                Event::Step {
+                    depth: 1,
+                    ..Default::default()
+                }),
+                Event::Step(StepEnd {
                     pc: 2,
                     op: opcode::STOP, // 0
                     stack: stack([64]),
                     gas: 29978997,
                     gas_cost: 0,
-                    depth: 1
-                }
+                    depth: 1,
+                    ..Default::default()
+                })
             ]
         );
     }
