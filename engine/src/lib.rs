@@ -120,7 +120,7 @@ impl<I: Inspector<Context>> Engine<I> {
 //   * storage
 
 #[derive(Debug, PartialEq)]
-struct Step {
+struct StepPre {
     pc: usize,
     op: u8,
     gas: u64,
@@ -130,7 +130,7 @@ struct Step {
 #[derive(Debug, Default, PartialEq, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
-pub struct StepEnd {
+pub struct Step {
     /// Program Counter
     pc: usize,
     /// OpCode
@@ -160,7 +160,7 @@ pub struct StepEnd {
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum Event {
-    Step(StepEnd),
+    Step(Step),
 }
 
 // TODO(toms): Summary (from https://eips.ethereum.org/EIPS/eip-3155)
@@ -177,7 +177,7 @@ pub trait TracerDelegate {
 
 pub struct Tracer<D> {
     gas_inspector: GasInspector,
-    step: Option<Step>,
+    step: Option<StepPre>,
     delegate: D,
 }
 
@@ -222,7 +222,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
 
         assert_eq!(self.step, None, "Should be empty - consumed by step_end");
 
-        self.step = Some(Step {
+        self.step = Some(StepPre {
             pc,
             op: opcode,
             stack: stack.clone().into_boxed_slice(),
@@ -256,7 +256,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
 
         let step = self.step.take().unwrap();
 
-        self.delegate.emit(Event::Step(StepEnd {
+        self.delegate.emit(Event::Step(Step {
             pc: step.pc,
             op: step.op,
             stack: step.stack,
@@ -485,7 +485,7 @@ mod tests {
         assert_eq!(
             engine.inspector().delegate.events,
             &[
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 0,
                     op: opcode::PUSH1, // 96
                     gas: 16756216,
@@ -494,7 +494,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 2,
                     op: opcode::DUP1, // 128
                     gas: 16756213,
@@ -503,7 +503,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 3,
                     op: opcode::MSTORE8, // 83
                     gas: 16756210,
@@ -512,7 +512,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 4,
                     op: opcode::PUSH1, // 96
                     gas: 16756198,
@@ -521,7 +521,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 6,
                     op: opcode::PUSH1, // 96
                     gas: 16756195,
@@ -530,7 +530,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 8,
                     op: opcode::SSTORE, // 85
                     gas: 16756192,
@@ -539,7 +539,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 9,
                     op: opcode::PUSH1, // 96
                     gas: 16734092,
@@ -548,7 +548,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 11,
                     op: opcode::PUSH1, // 96
                     gas: 16734089,
@@ -557,7 +557,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 13,
                     op: opcode::PUSH1, // 96
                     gas: 16734086,
@@ -566,7 +566,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 15,
                     op: opcode::PUSH1, // 96
                     gas: 16734083,
@@ -575,7 +575,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 17,
                     op: opcode::PUSH1, // 96
                     gas: 16734080,
@@ -584,7 +584,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 19,
                     op: opcode::GAS, // 90
                     gas: 16734077,
@@ -593,7 +593,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 20,
                     op: opcode::STATICCALL, // 250
                     gas: 16734075,
@@ -602,7 +602,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 21,
                     op: opcode::PUSH1, // 96
                     gas: 16731475,
@@ -611,7 +611,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 23,
                     op: opcode::RETURN, // 243
                     gas: 16731472,
@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(
             engine.inspector().delegate.events,
             &[
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 0,
                     op: opcode::PUSH1, // 96
                     stack: stack([]),
@@ -692,7 +692,7 @@ mod tests {
                     depth: 1,
                     ..Default::default()
                 }),
-                Event::Step(StepEnd {
+                Event::Step(Step {
                     pc: 2,
                     op: opcode::STOP, // 0
                     stack: stack([64]),
