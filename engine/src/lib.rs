@@ -63,11 +63,11 @@ use revm::handler::instructions::EthInstructions;
 use revm::inspector::InspectorEvmTr;
 use revm::inspector::inspectors::GasInspector;
 use revm::interpreter::interpreter::EthInterpreter;
-use revm::interpreter::interpreter_types::{Jumps, LoopControl};
+use revm::interpreter::interpreter_types::{Jumps, LoopControl, MemoryTr};
 use revm::interpreter::{
     CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
 };
-use revm::primitives::{Address, Log, U256};
+use revm::primitives::{Address, Log, U256, hex};
 use revm::state::Account;
 use revm::{Context, InspectEvm, Inspector, MainContext};
 use serde::Serialize;
@@ -125,6 +125,7 @@ struct StepPre {
     op: u8,
     gas: u64,
     stack: Box<[U256]>,
+    memory: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Serialize)]
@@ -143,15 +144,16 @@ pub struct Step {
     stack: Box<[U256]>,
     /// Depth of the call stack
     depth: u64,
+    /// Description of an error (should contain revert reason if supported)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    /// Array of all allocated values
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    memory: Option<String>,
     // /// Data returned by function call
     // return_data: Hex-String,
     // /// Amount of global gas refunded
     // refund: U256,
-    /// Description of an error (should contain revert reason if supported)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-    // /// Array of all allocated values
-    // memory: Array of Hex-Strings,
     // /// Array of all stored values
     // storage: Key-Value,
 }
@@ -196,7 +198,7 @@ impl<D> Tracer<D> {
 }
 
 impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
-    fn initialize_interp(&mut self, interpreter: &mut Interpreter, ctx: &mut Context) {
+    fn initialize_interp(&mut self, interpreter: &mut Interpreter, _ctx: &mut Context) {
         self.gas_inspector
             .initialize_interp(interpreter.control.gas());
 
@@ -215,18 +217,23 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
         let stack = interpreter.stack.data();
         let gas_remaining = interpreter.control.gas().remaining();
 
-        // println!(
-        //     "pc={pc:?} opcode={op:?} stack={stack:?} memSize={} gas=0x{gas:x}",
-        //     interpreter.memory.size()
-        // );
-
-        assert_eq!(self.step, None, "Should be empty - consumed by step_end");
-
+        assert_eq!(self.step, None, "Should be empty - consumed by `step_end`");
         self.step = Some(StepPre {
             pc,
             op: opcode,
             stack: stack.clone().into_boxed_slice(),
             gas: gas_remaining,
+            memory: if interpreter.memory.size() == 0 {
+                None
+            } else {
+                // TODO(toms): encode as base64 instead? (to save space)
+                Some(hex::encode_prefixed(
+                    interpreter
+                        .memory
+                        .slice(0..interpreter.memory.size())
+                        .as_ref(),
+                ))
+            },
         });
 
         // self.memory = if self.include_memory {
@@ -236,16 +243,7 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
         // } else {
         //     None
         // };
-        // self.section = if interp.runtime_flag.is_eof() {
-        //     Some(interp.sub_routine.routine_idx() as u64)
-        // } else {
-        //     None
-        // };
-        // self.function_depth = if interp.runtime_flag.is_eof() {
-        //     Some(interp.sub_routine.len() as u64 + 1)
-        // } else {
-        //     None
-        // };
+
         // self.refunded = interp.control.gas().refunded();
     }
 
@@ -263,17 +261,11 @@ impl<D: TracerDelegate> revm::Inspector<Context> for Tracer<D> {
             gas: step.gas,
             gas_cost: self.gas_inspector.last_gas_cost(),
             depth: ctx.journal().depth() as u64,
-            // section: self.section,
-            // function_depth: self.function_depth,
-            // return_data: "0x",
-            // refund: self.refunded as u64,
             error: {
                 let result = interpreter.control.instruction_result();
                 (result.is_error() || result.is_revert()).then(|| format!("{:?}", result))
             },
-            // memory: self.memory.take(),
-            // storage: None,
-            // return_stack: None,
+            memory: step.memory,
         }));
     }
 
@@ -446,28 +438,10 @@ mod tests {
             })
             .unwrap();
 
-        // https://eips.ethereum.org/EIPS/eip-3155#test-cases
-        //
+        // # https://eips.ethereum.org/EIPS/eip-3155#test-cases
         // λ evm run --code '0x604080536040604055604060006040600060ff5afa6040f3'
         //     --json --debug --dump --nomemory=false --noreturndata=false
         //     --sender '0xF0' --receiver '0xF1' --gas 10000000000
-        //
-        // {"opName":"PUSH1","pc":0,"op":96,"gas":"0x2540be400","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0}
-        // {"opName":"DUP1","pc":2,"op":128,"gas":"0x2540be3fd","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0}
-        // {"opName":"MSTORE8","pc":3,"op":83,"gas":"0x2540be3fa","gasCost":"0xc","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0}
-        // {"opName":"PUSH1","pc":4,"op":96,"gas":"0x2540be3ee","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":6,"op":96,"gas":"0x2540be3eb","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"SSTORE","pc":8,"op":85,"gas":"0x2540be3e8","gasCost":"0x5654","memSize":96,"stack":["0x40","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":9,"op":96,"gas":"0x2540b8d94","gasCost":"0x3","memSize":96,"stack":[],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":11,"op":96,"gas":"0x2540b8d91","gasCost":"0x3","memSize":96,"stack":["0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":13,"op":96,"gas":"0x2540b8d8e","gasCost":"0x3","memSize":96,"stack":["0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":15,"op":96,"gas":"0x2540b8d8b","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":17,"op":96,"gas":"0x2540b8d88","gasCost":"0x3","memSize":96,"stack":["0x40","0x0","0x40","0x0"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"GAS","pc":19,"op":90,"gas":"0x2540b8d85","gasCost":"0x2","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"STATICCALL","pc":20,"op":250,"gas":"0x2540b8d83","gasCost":"0x24abb5f76","memSize":96,"stack":["0x40","0x0","0x40","0x0","0xff","0x2540b8d83"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"PUSH1","pc":21,"op":96,"gas":"0x2540b835b","gasCost":"0x3","memSize":96,"stack":["0x1"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"opName":"RETURN","pc":23,"op":243,"gas":"0x2540b8358","gasCost":"0x0","memSize":96,"stack":["0x1","0x40"],"depth":1,"refund":0,"memory":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000"}
-        // {"output":"40","gasUsed":"0x60a8"}
 
         // TODO(toms): check result.state?
         assert_eq!(
@@ -481,146 +455,164 @@ mod tests {
             }
         );
 
-        assert_eq!(
-            engine.inspector().delegate.events,
-            &[
-                Event::Step(Step {
-                    pc: 0,
-                    op: opcode::PUSH1, // 96
-                    gas: 16756216,
-                    gas_cost: 3,
-                    stack: stack([]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 2,
-                    op: opcode::DUP1, // 128
-                    gas: 16756213,
-                    gas_cost: 3,
-                    stack: stack([64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 3,
-                    op: opcode::MSTORE8, // 83
-                    gas: 16756210,
-                    gas_cost: 12,
-                    stack: stack([64, 64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 4,
-                    op: opcode::PUSH1, // 96
-                    gas: 16756198,
-                    gas_cost: 3,
-                    stack: stack([]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 6,
-                    op: opcode::PUSH1, // 96
-                    gas: 16756195,
-                    gas_cost: 3,
-                    stack: stack([64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 8,
-                    op: opcode::SSTORE, // 85
-                    gas: 16756192,
-                    gas_cost: 22100,
-                    stack: stack([64, 64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 9,
-                    op: opcode::PUSH1, // 96
-                    gas: 16734092,
-                    gas_cost: 3,
-                    stack: stack([]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 11,
-                    op: opcode::PUSH1, // 96
-                    gas: 16734089,
-                    gas_cost: 3,
-                    stack: stack([64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 13,
-                    op: opcode::PUSH1, // 96
-                    gas: 16734086,
-                    gas_cost: 3,
-                    stack: stack([64, 0]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 15,
-                    op: opcode::PUSH1, // 96
-                    gas: 16734083,
-                    gas_cost: 3,
-                    stack: stack([64, 0, 64]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 17,
-                    op: opcode::PUSH1, // 96
-                    gas: 16734080,
-                    gas_cost: 3,
-                    stack: stack([64, 0, 64, 0]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 19,
-                    op: opcode::GAS, // 90
-                    gas: 16734077,
-                    gas_cost: 2,
-                    stack: stack([64, 0, 64, 0, 255]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 20,
-                    op: opcode::STATICCALL, // 250
-                    gas: 16734075,
-                    gas_cost: 16472646,
-                    stack: stack([64, 0, 64, 0, 255, 16734075]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 21,
-                    op: opcode::PUSH1, // 96
-                    gas: 16731475,
-                    gas_cost: 3,
-                    stack: stack([1]),
-                    depth: 1,
-                    ..Default::default()
-                }),
-                Event::Step(Step {
-                    pc: 23,
-                    op: opcode::RETURN, // 243
-                    gas: 16731472,
-                    gas_cost: 0,
-                    stack: stack([1, 64]),
-                    depth: 1,
-                    ..Default::default()
-                })
-            ]
-        );
+        let memory = "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000";
+
+        let expected = &[
+            Event::Step(Step {
+                pc: 0,
+                op: opcode::PUSH1, // 96
+                gas: 16756216,
+                gas_cost: 3,
+                stack: stack([]),
+                depth: 1,
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 2,
+                op: opcode::DUP1, // 128
+                gas: 16756213,
+                gas_cost: 3,
+                stack: stack([64]),
+                depth: 1,
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 3,
+                op: opcode::MSTORE8, // 83
+                gas: 16756210,
+                gas_cost: 12,
+                stack: stack([64, 64]),
+                depth: 1,
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 4,
+                op: opcode::PUSH1, // 96
+                gas: 16756198,
+                gas_cost: 3,
+                stack: stack([]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 6,
+                op: opcode::PUSH1, // 96
+                gas: 16756195,
+                gas_cost: 3,
+                stack: stack([64]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 8,
+                op: opcode::SSTORE, // 85
+                gas: 16756192,
+                gas_cost: 22100,
+                stack: stack([64, 64]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 9,
+                op: opcode::PUSH1, // 96
+                gas: 16734092,
+                gas_cost: 3,
+                stack: stack([]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 11,
+                op: opcode::PUSH1, // 96
+                gas: 16734089,
+                gas_cost: 3,
+                stack: stack([64]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 13,
+                op: opcode::PUSH1, // 96
+                gas: 16734086,
+                gas_cost: 3,
+                stack: stack([64, 0]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 15,
+                op: opcode::PUSH1, // 96
+                gas: 16734083,
+                gas_cost: 3,
+                stack: stack([64, 0, 64]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 17,
+                op: opcode::PUSH1, // 96
+                gas: 16734080,
+                gas_cost: 3,
+                stack: stack([64, 0, 64, 0]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 19,
+                op: opcode::GAS, // 90
+                gas: 16734077,
+                gas_cost: 2,
+                stack: stack([64, 0, 64, 0, 255]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 20,
+                op: opcode::STATICCALL, // 250
+                gas: 16734075,
+                gas_cost: 16472646,
+                stack: stack([64, 0, 64, 0, 255, 16734075]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 21,
+                op: opcode::PUSH1, // 96
+                gas: 16731475,
+                gas_cost: 3,
+                stack: stack([1]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+            Event::Step(Step {
+                pc: 23,
+                op: opcode::RETURN, // 243
+                gas: 16731472,
+                gas_cost: 0,
+                stack: stack([1, 64]),
+                depth: 1,
+                memory: Some(memory.into()),
+                ..Default::default()
+            }),
+        ];
+
+        let actual = &engine.inspector().delegate.events;
+
+        assert_eq!(actual.len(), expected.len());
+        for (n, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(actual, expected, "Item {n} did not match!");
+        }
     }
 
     #[test]
