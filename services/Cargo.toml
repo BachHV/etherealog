@@ -4,6 +4,7 @@ edition = "2024"
 
 [dependencies]
 engine = { path = "../engine" }
+block_traces = { path = "../block_traces"}
 revm = { version = "22", features = ["serde-json"] }
 
 rocket = { version = "0.5.1", features = ["json"] }

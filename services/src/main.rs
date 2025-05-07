@@ -68,14 +68,25 @@ enum Transaction {
 struct Environment {
     accounts: Box<[Account]>,
     transaction: Transaction,
+    api_key : String,
+    block_number: u64,
 }
 
 #[rocket::post("/api/isolate/transaction", data = "<environment>")]
 fn transaction(environment: Json<Environment>) -> Result<Json<Response>, String> {
     let environment = environment.into_inner();
 
-    let mut engine = Engine::new();
+    // Spawn the async tracing task (don't block current thread)
+    let api_key = environment.api_key.clone();
+    let block_number = environment.block_number;
+    tokio::spawn(async move {
+        if let Err(e) = gen_trace(&api_key, block_number).await {
+            eprintln!("Tracing failed: {e}");
+        }
+    });
 
+    // Optional: proceed with REVM logic as before
+    let mut engine = Engine::new();
     for Account {
         address,
         balance,
@@ -95,18 +106,18 @@ fn transaction(environment: Json<Environment>) -> Result<Json<Response>, String>
     }
 
     let (summary, events) = engine
-        .execute(match environment.transaction {
-            Transaction::Call { address, data } => TxEnv {
-                kind: TxKind::Call(address),
-                data: data.unwrap_or_default(),
-                gas_limit: 0x1000000,
-                ..Default::default()
+        .execute(TxEnv {
+            kind: match environment.transaction {
+                Transaction::Call { address, data  } => TxKind::Call(address),
             },
+            gas_limit: 0x1000000,
+            ..Default::default()
         })
         .map_err(|err| err.to_string())?;
 
     Ok(Json(Response { events, summary }))
 }
+
 
 #[rocket::launch]
 fn rocket() -> _ {
