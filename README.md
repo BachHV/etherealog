@@ -45,7 +45,7 @@ If you're new to Rust, [`rustup`](https://rustup.rs/) is the standard installer 
     * OpenAPI definition
     * Unit test suite
 * Taobo Liao
-* Bach Hoang
+* Bach Hoang: Build a block tracer for EVM. Here is the link for the code: https://github.com/BachHV/etherealog/tree/block_traces
 
 ## Future Improvements
 
